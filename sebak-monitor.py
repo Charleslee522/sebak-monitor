@@ -9,7 +9,11 @@ from datetime import timedelta
 import time
 import json
 
+# `total` is the total number of nodes to resolve to the URL.
+# Find 'https: // mainnet-node- {} .blockchainos.org /' with a value from 0 to total to find the valid url.
 total = 20
+
+# `interval_sec` is second time interval for checking blocks
 interval_sec = 10
 
 class InvalidBehavior(Exception):
