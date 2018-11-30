@@ -171,8 +171,8 @@ def slack_out(url, prefix, text):
         log.error(e)
         pass
 
-def email_out(e):
-    log.info(e) 
+def email_out(out_str):
+    log.info(out_str) 
 
 if __name__ == '__main__':
     if len(sys.argv) < 2:
