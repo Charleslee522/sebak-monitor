@@ -1,4 +1,5 @@
 import os
+import sys
 from time import sleep
 import requests
 from multiprocessing import Pool
@@ -8,13 +9,11 @@ from datetime import datetime
 from datetime import timedelta
 import time
 import json
+import configparser
 
-# `total` is the total number of nodes to resolve to the URL.
-# Find 'https: // mainnet-node- {} .blockchainos.org /' with a value from 0 to total to find the valid url.
+# Find 'https://mainnet-node-{}.blockchainos.org/' with a value from 0 to total to find the valid url.
+get_node_info_url_format = 'https://mainnet-node-{}.blockchainos.org/'
 total = 20
-
-# `interval_sec` is second time interval for checking blocks
-interval_sec = 10
 
 class InvalidBehavior(Exception):
     def __init__(self, value):
@@ -39,11 +38,9 @@ def get_latest_block_height(url):
     return obj['block']['height'], obj
 
 def get_urls():
-    url_format = 'https://mainnet-node-{}.blockchainos.org/'
-
     urls = []
     for i in range(0, total):
-        urls.append(url_format.format(i))
+        urls.append(get_node_info_url_format.format(i))
 
     return urls
 
@@ -66,16 +63,12 @@ def check_have_same_blocks(blocks):
     height = blocks[0]['height']
     hash = blocks[0]['hash']
     for block in blocks:
-        if block['height'] != height:
-            raise InvalidBehavior(
-                'In {}, height({}) is different with {}(height:{})'.format(
-                block['url'].split('/')[2], block['height'],
-                blocks[0]['url'].split('/')[2], height))
         if block['hash'] != hash:
             raise InvalidBehavior(
-                'In {}, block-hash({}) is different with {}(hash:{}) in height'.format(
-                block['url'].split('/')[2], block['height'],
-                blocks[0]['url'].split('/')[2], height))
+                'In {}, block-hash({}) is different with {}(hash:{}) in height {}'.format(
+                block['url'].split('/')[2], block['hash'],
+                blocks[0]['url'].split('/')[2], hash,
+                height))
 
     return ''
 
@@ -112,7 +105,13 @@ def get_time_diff(get_block_url, first_consensused_block_height, latest_height):
 
     return actual - expected
 
-def run(urls, prev_latest_height):
+
+def parse_conf(ini_file):
+    config = configparser.ConfigParser()
+    config.read(ini_file)
+    return config
+
+def run(urls, prev_latest_height, block_confirm_wait):
     try:
         valid_urls = get_valid_urls(urls)
     except requests.exceptions.RequestException as e:
@@ -127,7 +126,7 @@ def run(urls, prev_latest_height):
         raise
 
     if prev_latest_height == latest_height:
-        raise InvalidBehavior('The latest_height is not changed for {} seconds'.format(interval_sec))
+        raise InvalidBehavior('The latest_height is not changed for {} seconds'.format(block_check_interval_sec))
 
     n = len(valid_urls)
 
@@ -137,7 +136,7 @@ def run(urls, prev_latest_height):
     if latest_height < 1:
         raise InvalidBehavior('latest_height(%d) is valid'.format(latest_height))
 
-    sleep(interval_sec)
+    sleep(block_confirm_wait)
 
     get_block_urls = []
     for url in valid_urls:
@@ -164,20 +163,44 @@ def run(urls, prev_latest_height):
     ret['node'] = node
     return ret
 
+def slack_out(url, prefix, text):
+    try:
+        time_str = datetime.now().strftime('[%m-%d|%H:%M:%S]')
+        requests.post(url, json={"text": '{} {} {}'.format(prefix,time_str,text)})
+    except requests.exceptions.RequestException as e:
+        log.error(e)
+        pass
+
+def email_out(e):
+    log.info(e) 
+
 if __name__ == '__main__':
+    if len(sys.argv) < 2:
+        log.error('The number of arguments should be 1(ini file for configuration)')
+        exit(1)
+
+    ini_file = sys.argv[1]
+
     urls = get_urls()
     prev_latest_height = 0
-
+    alarm_time = datetime.now()-timedelta(days=1) # init to yesterday for alarming at first immediately
+    
     while (True):
+        config = parse_conf(ini_file)
+        checking_block_interval=int(config['INTERVAL']['CheckingBlock'])
+        block_confirm_wait=int(config['INTERVAL']['BlockConfirmWait'])
+        alarm_interval=int(config['INTERVAL']['Alarm'])
+        slack_url=config['URL']['SlackWebhook']
         try:
-            ret = run(urls, prev_latest_height)
+            ret = run(urls, prev_latest_height, block_confirm_wait)
         except requests.exceptions.RequestException:
             continue
         except json.decoder.JSONDecodeError:
             continue
         except InvalidBehavior as e:
-            print(e)    # alarm with email and slack
-            break       # should be removed
+            email_out(str(e))
+            slack_out(slack_url, '@here ERROR', str(e))
+            break
 
         prev_latest_height = ret['latest-height']
 
@@ -185,9 +208,13 @@ if __name__ == '__main__':
         time_diff = get_time_diff(ret['valid-urls'][0]+'api/v1/blocks/%d', first_consensused_block_height, ret['latest-height'])
         n = ret['n']
         height = ret['blocks'][0]['height']
-        round = ret['blocks'][0]['round']
         user_txs = ret['node']['block']['total-txs'] - height
         user_ops = ret['node']['block']['total-ops'] - (height*2)
 
-        # Print for logging
-        log.info('nodes: %d, height: %d, round: %d, user-txs: %d, user-ops: %d, time-diff: %s', n, height, round, user_txs, user_ops, time_diff)
+        alarm_time_diff = datetime.now() - alarm_time
+        if alarm_time_diff > timedelta(minutes=alarm_interval):
+            text='Nodes: {}, Height: {}, UserTxs: {}, UserOps: {}, TimeDiff: {}'.format(n, height, user_txs, user_ops, time_diff)
+            slack_out(slack_url, 'INFO', text)
+            alarm_time = datetime.now()
+        
+        sleep(checking_block_interval - block_confirm_wait)
