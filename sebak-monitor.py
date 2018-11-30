@@ -143,7 +143,7 @@ def run(urls, prev_latest_height, block_confirm_wait):
         raise InvalidBehavior('There are zero valid urls.')
 
     if latest_height < 1:
-        raise InvalidBehavior('The latest_height(%d) is invalid.'.format(latest_height))
+        raise InvalidBehavior('The latest_height {} is invalid'.format(latest_height))
 
     sleep(block_confirm_wait)
 
