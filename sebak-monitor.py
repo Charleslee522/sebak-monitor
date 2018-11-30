@@ -190,7 +190,8 @@ if __name__ == '__main__':
         checking_block_interval=int(config['INTERVAL']['CheckingBlock'])
         block_confirm_wait=int(config['INTERVAL']['BlockConfirmWait'])
         alarm_interval=int(config['INTERVAL']['Alarm'])
-        slack_url=config['URL']['SlackWebhook']
+        slack_url_info=config['URL']['SlackWebhookInfo']
+        slack_url_error=config['URL']['SlackWebhookError']
         try:
             ret = run(urls, prev_latest_height, block_confirm_wait)
         except requests.exceptions.RequestException:
@@ -199,7 +200,7 @@ if __name__ == '__main__':
             continue
         except InvalidBehavior as e:
             email_out(str(e))
-            slack_out(slack_url, '@here ERROR', str(e))
+            slack_out(slack_url_error, '@here ERROR', str(e))
             break
 
         prev_latest_height = ret['latest-height']
@@ -214,7 +215,7 @@ if __name__ == '__main__':
         alarm_time_diff = datetime.now() - alarm_time
         if alarm_time_diff > timedelta(minutes=alarm_interval):
             text='Nodes: {}, Height: {}, UserTxs: {}, UserOps: {}, TimeDiff: {}'.format(n, height, user_txs, user_ops, time_diff)
-            slack_out(slack_url, 'INFO', text)
+            slack_out(slack_url_info, 'INFO', text)
             alarm_time = datetime.now()
         
         sleep(checking_block_interval - block_confirm_wait)
