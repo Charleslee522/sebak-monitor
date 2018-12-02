@@ -133,17 +133,17 @@ def run(urls, prev_latest_height, block_confirm_wait):
         raise
 
     if prev_latest_height == latest_height:
-        raise InvalidBehavior('The latest_height is not changed for {} seconds'.format(
+        raise InvalidBehavior('The latest_height has not changed for {} seconds'.format(
             checking_block_interval,
         ))
 
     n = len(valid_urls)
 
     if n < 1:
-        raise InvalidBehavior('The number of nodes is zero')
+        raise InvalidBehavior('There are zero valid urls')
 
     if latest_height < 1:
-        raise InvalidBehavior('latest_height(%d) is valid'.format(latest_height))
+        raise InvalidBehavior('The latest_height(%d) is invalid'.format(latest_height))
 
     sleep(block_confirm_wait)
 
@@ -208,7 +208,7 @@ if __name__ == '__main__':
     log.info('start sebak-monitor')
 
     if len(sys.argv) < 2:
-        log.fatal('The number of arguments should be 1(ini file for configuration)')
+        log.fatal('The number of argument should be 1(ini file for configuration)')
         exit(1)
 
     ini_file = sys.argv[1]
@@ -239,7 +239,7 @@ if __name__ == '__main__':
             continue
         except InvalidBehavior as e:
             email_out(str(e))
-            slack_out(slack_url_error, '@here ERROR', str(e))
+            slack_out(slack_url_error, '<!channel> ERROR', str(e))
             break
 
         prev_latest_height = ret['latest-height']
