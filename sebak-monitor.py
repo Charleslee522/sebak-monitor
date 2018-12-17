@@ -125,7 +125,7 @@ def run(urls, prev_latest_height, block_confirm_wait):
         raise
 
     if len(valid_urls) < 1:
-        raise InvalidBehavior('There is no valid url')
+        raise InvalidBehavior('There is no valid url.')
 
     try:
         latest_height, node = get_latest_block_height(valid_urls[0])
@@ -133,17 +133,17 @@ def run(urls, prev_latest_height, block_confirm_wait):
         raise
 
     if prev_latest_height == latest_height:
-        raise InvalidBehavior('The latest_height has not changed for {} seconds'.format(
+        raise InvalidBehavior('The latest_height has not changed for {} seconds.'.format(
             checking_block_interval,
         ))
 
     n = len(valid_urls)
 
     if n < 1:
-        raise InvalidBehavior('There are zero valid urls')
+        raise InvalidBehavior('There are zero valid urls.')
 
     if latest_height < 1:
-        raise InvalidBehavior('The latest_height(%d) is invalid'.format(latest_height))
+        raise InvalidBehavior('The latest_height(%d) is invalid.'.format(latest_height))
 
     sleep(block_confirm_wait)
 
@@ -186,14 +186,14 @@ def slack_out(url, prefix, text):
         pass
 
 
-def email_out(out_str):
+def email_out(out_str, postfix):
     log.debug('send email')
     ret = sendmail(
         smtp_config=config['smtp'],
         from_addr=config['smtp']['from_address'],
         to_addr=email_to_addresses,
         subject='SEBAK: Invalid benavior found',
-        body=out_str,
+        body=out_str + '\n\n' + postfix,
     )
 
     return ret
@@ -238,7 +238,7 @@ if __name__ == '__main__':
             log.exception(e)
             continue
         except InvalidBehavior as e:
-            email_out(str(e))
+            email_out(str(e), 'See progress in #sebak-monitor(https://bosplatform.slack.com/archives/CEGT607PH)\n')
             slack_out(slack_url_error, '<!channel> ERROR', str(e))
             break
 
