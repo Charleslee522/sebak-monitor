@@ -173,9 +173,13 @@ def run(urls, prev_latest_height, block_confirm_wait):
     return ret
 
 
-def slack_out(url, prefix, text):
+def slack_out(url, prefix, *strs):
     if len(url) < 1:
         return
+
+    text = ''
+    for s in strs:
+        text += s + '\n\n'
 
     log.debug('send slack')
     try:
@@ -186,17 +190,29 @@ def slack_out(url, prefix, text):
         pass
 
 
-def email_out(out_str, postfix):
+def email_out(*strs):
     log.debug('send email')
+    body_str = ''
+    for s in strs:
+        body_str += s + '\n\n'
+
     ret = sendmail(
         smtp_config=config['smtp'],
         from_addr=config['smtp']['from_address'],
         to_addr=email_to_addresses,
         subject='SEBAK: Invalid benavior found',
-        body=out_str + '\n\n' + postfix,
+        body=body_str,
     )
 
     return ret
+
+def file_to_string(path):
+    log.debug('file_to_string')
+
+    with open(path, 'r') as f:
+        data=f.read()
+
+    return data
 
 
 logging.basicConfig()
@@ -219,6 +235,7 @@ if __name__ == '__main__':
     alarm_interval = int(config['INTERVAL']['Alarm'])
     slack_url_info=config['URL']['SlackWebhookInfo']
     slack_url_error=config['URL']['SlackWebhookError']
+    postfix_file_path=config['FILES']['postfix']
 
     email_to_addresses = list(map(lambda x: x.strip(), config['mail']['to_address'].split(',')))
 
@@ -238,8 +255,8 @@ if __name__ == '__main__':
             log.exception(e)
             continue
         except InvalidBehavior as e:
-            email_out(str(e), 'See progress in #sebak-monitor(https://bosplatform.slack.com/archives/CEGT607PH)\n')
-            slack_out(slack_url_error, '<!channel> ERROR', str(e))
+            email_out(str(e), file_to_string(postfix_file_path))
+            slack_out(slack_url_error, '<!channel> ERROR', str(e), file_to_string(postfix_file_path))
             break
 
         prev_latest_height = ret['latest-height']
